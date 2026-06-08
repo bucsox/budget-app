@@ -73,7 +73,7 @@ export default function Transactions() {
       const dateKey = headers.find(h => h.includes('date'))
       const descKey = headers.find(h => h.includes('desc') || h.includes('memo') || h.includes('transaction') || h.includes('name'))
       const amtKey = headers.find(h => h.includes('amount') || h.includes('debit') || h.includes('credit'))
-      const typeKey = headers.find(h => h.includes('type') || h.includes('credit') || h.includes('debit'))
+      
 
       if (!dateKey || !descKey || !amtKey) { skipped++; continue }
 
