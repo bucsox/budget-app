@@ -3,23 +3,43 @@ import { supabase } from '../supabaseClient'
 
 const CATEGORIES = ['Housing','Food','Transport','Health','Entertainment','Utilities','Salary','Freelance','Other']
 
-function guessCategory(description) {
-  const d = description.toLowerCase()
+function guessCategory(nfcuCategory, description) {
+  const cat = (nfcuCategory || '').toLowerCase()
+  const d = (description || '').toLowerCase()
+  if (cat.includes('food') || cat.includes('dining') || cat.includes('restaurant') || cat.includes('grocery')) return 'Food'
+  if (cat.includes('transport') || cat.includes('auto') || cat.includes('gas') || cat.includes('fuel')) return 'Transport'
+  if (cat.includes('health') || cat.includes('medical') || cat.includes('pharmacy')) return 'Health'
+  if (cat.includes('entertainment') || cat.includes('subscription') || cat.includes('streaming')) return 'Entertainment'
+  if (cat.includes('util') || cat.includes('electric') || cat.includes('water') || cat.includes('internet')) return 'Utilities'
+  if (cat.includes('income') || cat.includes('payroll') || cat.includes('deposit')) return 'Salary'
   if (d.includes('rent') || d.includes('mortgage')) return 'Housing'
-  if (d.includes('grocery') || d.includes('food') || d.includes('restaurant') || d.includes('mcdonald') || d.includes('starbucks') || d.includes('walmart') || d.includes('kroger') || d.includes('publix')) return 'Food'
-  if (d.includes('gas') || d.includes('shell') || d.includes('bp') || d.includes('exxon') || d.includes('uber') || d.includes('lyft') || d.includes('parking')) return 'Transport'
-  if (d.includes('netflix') || d.includes('spotify') || d.includes('hulu') || d.includes('disney') || d.includes('amazon prime')) return 'Entertainment'
-  if (d.includes('electric') || d.includes('water') || d.includes('internet') || d.includes('phone') || d.includes('utility')) return 'Utilities'
-  if (d.includes('doctor') || d.includes('pharmacy') || d.includes('cvs') || d.includes('walgreen') || d.includes('hospital') || d.includes('medical')) return 'Health'
-  if (d.includes('salary') || d.includes('payroll') || d.includes('direct deposit') || d.includes('ach deposit')) return 'Salary'
-  if (d.includes('freelance') || d.includes('invoice') || d.includes('payment received')) return 'Freelance'
+  if (d.includes('grocery') || d.includes('walmart') || d.includes('kroger') || d.includes('publix')) return 'Food'
+  if (d.includes('netflix') || d.includes('spotify') || d.includes('hulu') || d.includes('disney')) return 'Entertainment'
+  if (d.includes('shell') || d.includes('exxon') || d.includes('bp') || d.includes('uber') || d.includes('lyft')) return 'Transport'
+  if (d.includes('cvs') || d.includes('walgreen') || d.includes('doctor') || d.includes('hospital')) return 'Health'
+  if (d.includes('electric') || d.includes('water') || d.includes('internet') || d.includes('phone')) return 'Utilities'
+  if (d.includes('salary') || d.includes('payroll') || d.includes('direct deposit')) return 'Salary'
   return 'Other'
+}
+
+function parseCSVLine(line) {
+  const result = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '"') { inQuotes = !inQuotes }
+    else if (line[i] === ',' && !inQuotes) { result.push(current.trim()); current = '' }
+    else { current += line[i] }
+  }
+  result.push(current.trim())
+  return result
 }
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState([])
   const [filter, setFilter] = useState('all')
   const [showForm, setShowForm] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [form, setForm] = useState({ type: 'expense', description: '', amount: '', date: new Date().toISOString().slice(0, 10), category: 'Food', account: 'Checking' })
@@ -43,6 +63,7 @@ export default function Transactions() {
 
   async function handleDelete(id) {
     await supabase.from('transactions').delete().eq('id', id)
+    setDeleteConfirm(null)
     fetchTransactions()
   }
 
@@ -54,7 +75,8 @@ export default function Transactions() {
 
     const text = await file.text()
     const lines = text.split('\n').filter(l => l.trim())
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''))
+    const rawHeaders = parseCSVLine(lines[0])
+    const headers = rawHeaders.map(h => h.toLowerCase().replace(/"/g, '').trim())
 
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -63,30 +85,46 @@ export default function Transactions() {
     const rows = []
 
     for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].match(/(".*?"|[^,]+)(?=\s*,|\s*$)/g)
-      if (!cols) continue
+      const cols = parseCSVLine(lines[i])
+      if (cols.length < 3) { skipped++; continue }
+
       const row = {}
-      headers.forEach((h, idx) => {
-        row[h] = cols[idx] ? cols[idx].replace(/"/g, '').trim() : ''
+      headers.forEach((h, idx) => { row[h] = (cols[idx] || '').replace(/"/g, '').trim() })
+
+      // Map Navy Federal columns exactly
+      const postingDate = row['posting date'] || row['transaction date'] || ''
+      const description = row['description'] || row['memo'] || ''
+      const rawAmount = row['amount'] || ''
+      const indicator = (row['credit debit indicator'] || '').toLowerCase()
+      const nfcuCategory = row['category'] || ''
+
+      if (!postingDate || !rawAmount) { skipped++; continue }
+
+      const amount = Math.abs(parseFloat(rawAmount.replace(/[$,]/g, '')) || 0)
+      if (amount === 0) { skipped++; continue }
+
+      // Navy Federal uses "credit" for money coming in, "debit" for money going out
+      const type = indicator === 'credit' ? 'income' : 'expense'
+      const category = guessCategory(nfcuCategory, description)
+
+      // Parse date — handle MM/DD/YYYY format
+      let date = postingDate
+      if (postingDate.includes('/')) {
+        const parts = postingDate.split('/')
+        if (parts.length === 3) {
+          date = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+        }
+      }
+
+      rows.push({
+        user_id: user.id,
+        type,
+        description: description || 'Imported transaction',
+        amount,
+        date,
+        category,
+        account: 'Checking'
       })
-
-      const dateKey = headers.find(h => h.includes('date'))
-      const descKey = headers.find(h => h.includes('desc') || h.includes('memo') || h.includes('transaction') || h.includes('name'))
-      const amtKey = headers.find(h => h.includes('amount') || h.includes('debit') || h.includes('credit'))
-      
-
-      if (!dateKey || !descKey || !amtKey) { skipped++; continue }
-
-      const rawAmount = parseFloat(row[amtKey]?.replace(/[$,]/g, '')) || 0
-      if (rawAmount === 0) { skipped++; continue }
-
-      const amount = Math.abs(rawAmount)
-      const type = rawAmount < 0 ? 'expense' : 'income'
-      const description = row[descKey] || 'Imported transaction'
-      const date = row[dateKey] || new Date().toISOString().slice(0, 10)
-      const category = guessCategory(description)
-
-      rows.push({ user_id: user.id, type, description, amount, date, category, account: 'Checking' })
       imported++
     }
 
@@ -172,19 +210,33 @@ export default function Transactions() {
             </button>
           ))}
         </div>
-        {filtered.length === 0 ? <div style={{ fontSize: 13, color: '#aaa' }}>No transactions yet</div> :
-          filtered.map(t => (
-            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0ee', fontSize: 13 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.description}</div>
-                <div style={{ fontSize: 11, color: '#aaa' }}>{t.category} · {t.account} · {t.date}</div>
+        {filtered.length === 0
+          ? <div style={{ fontSize: 13, color: '#aaa' }}>No transactions yet</div>
+          : filtered.map(t => (
+            <div key={t.id}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: deleteConfirm === t.id ? 'none' : '1px solid #f0f0ee', fontSize: 13 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.description}</div>
+                  <div style={{ fontSize: 11, color: '#aaa' }}>{t.category} · {t.account} · {t.date}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <span style={{ fontWeight: 500, color: t.type === 'income' ? '#1D9E75' : '#E24B4A' }}>
+                    {t.type === 'income' ? '+' : '-'}{fmt(t.amount)}
+                  </span>
+                  <button onClick={() => setDeleteConfirm(t.id)} style={{ background: '#FCEBEB', border: 'none', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', color: '#A32D2D' }}>
+                    Delete
+                  </button>
+                </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                <span style={{ fontWeight: 500, color: t.type === 'income' ? '#1D9E75' : '#E24B4A' }}>
-                  {t.type === 'income' ? '+' : '-'}{fmt(t.amount)}
-                </span>
-                <button onClick={() => handleDelete(t.id)} style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: 16 }}>×</button>
-              </div>
+              {deleteConfirm === t.id && (
+                <div style={{ background: '#FCEBEB', border: '1px solid #F7C1C1', borderRadius: 8, padding: '10px 14px', marginBottom: 8, fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Delete <strong>{t.description}</strong>?</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setDeleteConfirm(null)} style={{ padding: '5px 12px', border: '1px solid #e5e5e5', borderRadius: 6, background: '#fff', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={() => handleDelete(t.id)} style={{ padding: '5px 12px', background: '#A32D2D', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>Yes, delete</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
       </div>
