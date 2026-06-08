@@ -18,7 +18,9 @@ export default function Accounts() {
   async function handleAdd() {
     if (!form.name || !form.balance) return
     const { data: { user } } = await supabase.auth.getUser()
-    await supabase.from('accounts').insert({ ...form, balance: parseFloat(form.balance), user_id: user.id })
+    const rawBalance = parseFloat(form.balance)
+    const balance = form.type === 'Credit Card' ? -Math.abs(rawBalance) : rawBalance
+    await supabase.from('accounts').insert({ ...form, balance, user_id: user.id })
     setShowForm(false)
     setForm({ name: '', type: 'Checking', balance: '' })
     fetchAccounts()
