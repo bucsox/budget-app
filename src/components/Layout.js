@@ -8,6 +8,7 @@ const links = [
   { to: '/accounts', label: 'Accounts', icon: '🏦' },
   { to: '/recurring', label: 'Recurring', icon: '🔁' },
   { to: '/reports', label: 'Reports', icon: '📈' },
+  { to: '/analytics', label: 'Analytics', icon: '🔍' },
 ]
 
 export default function Layout() {
