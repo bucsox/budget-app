@@ -8,6 +8,7 @@ import Budgets from './pages/Budgets'
 import Accounts from './pages/Accounts'
 import Recurring from './pages/Recurring'
 import Reports from './pages/Reports'
+import ResetPassword from './pages/ResetPassword'
 import Analytics from './pages/Analytics'
 import Login from './pages/Login'
 
@@ -32,6 +33,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={session ? <Layout /> : <Navigate to="/login" />}>
           <Route index element={<Dashboard />} />
           <Route path="transactions" element={<Transactions />} />
