@@ -11,9 +11,25 @@ export default function ResetPassword() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setReady(true)
-    })
+    // Handle the token from the URL hash
+    const hashParams = new URLSearchParams(window.location.hash.substring(1))
+    const accessToken = hashParams.get('access_token')
+    const refreshToken = hashParams.get('refresh_token')
+    const type = hashParams.get('type')
+
+    if (type === 'recovery' && accessToken) {
+      supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        .then(({ error }) => {
+          if (error) setMessage('Invalid or expired reset link. Please request a new one.')
+          else setReady(true)
+        })
+    } else {
+      // Also listen for auth state change as fallback
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') setReady(true)
+      })
+      return () => subscription.unsubscribe()
+    }
   }, [])
 
   async function handleReset() {
@@ -30,7 +46,15 @@ export default function ResetPassword() {
     setLoading(false)
   }
 
-  const inputStyle = { padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 14, width: '100%', background: 'var(--bg2)', color: 'var(--text)' }
+  const inputStyle = {
+    padding: '10px 12px',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    fontSize: 14,
+    width: '100%',
+    background: 'var(--bg2)',
+    color: 'var(--text)'
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg)' }}>
@@ -38,9 +62,17 @@ export default function ResetPassword() {
         <div style={{ fontSize: 24, fontWeight: 600, marginBottom: 4, color: 'var(--text)' }}>💰 BudgetApp</div>
         <div style={{ fontSize: 14, color: 'var(--text3)', marginBottom: 24 }}>Set a new password</div>
 
-        {!ready ? (
+        {!ready && !message && (
           <div style={{ fontSize: 13, color: 'var(--text3)' }}>Verifying your reset link...</div>
-        ) : (
+        )}
+
+        {message && !ready && (
+          <div style={{ fontSize: 13, color: 'var(--red)', padding: '8px 12px', background: '#FCEBEB', borderRadius: 8 }}>
+            {message}
+          </div>
+        )}
+
+        {ready && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <input
               type="password"
@@ -66,6 +98,11 @@ export default function ResetPassword() {
               disabled={loading}
               style={{ padding: '10px', background: 'var(--blue)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, cursor: 'pointer', fontWeight: 500 }}>
               {loading ? 'Updating...' : 'Set new password'}
+            </button>
+            <button
+              onClick={() => navigate('/login')}
+              style={{ padding: '10px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: 'var(--text2)' }}>
+              Back to sign in
             </button>
           </div>
         )}
