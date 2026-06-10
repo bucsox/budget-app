@@ -122,12 +122,12 @@ export default function Analytics() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h1 style={{ fontSize: 22, fontWeight: 500 }}>Analytics</h1>
         <div style={{ display: 'flex', gap: 4, background: '#f0f0ee', borderRadius: 8, padding: 4 }}>
-          {PERIOD_OPTIONS.map(p => (
-            <button key={p} onClick={() => setPeriod(p)} style={{ padding: '6px 16px', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer', background: period === p ? '#fff' : 'transparent', color: period === p ? '#2457a0' : '#888', fontWeight: period === p ? 500 : 400, boxShadow: period === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
-              {p}
-            </button>
-          ))}
-        </div>
+            {PERIOD_OPTIONS.map(p => (
+                <button key={p} onClick={() => setPeriod(p)} style={{ padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer', background: period === p ? '#fff' : 'transparent', color: period === p ? '#2457a0' : '#888', fontWeight: period === p ? 500 : 400, boxShadow: period === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+                {p}
+                </button>
+            ))}
+            </div>
       </div>
 
       {/* Summary metrics */}
@@ -150,11 +150,11 @@ export default function Analytics() {
         <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Spending over time</div>
         {timeData.every(d => d.spent === 0)
           ? <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center', padding: '2rem' }}>No expenses in this period</div>
-          : <ResponsiveContainer width="100%" height={200}>
+          : <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 160 : 200}>
               <BarChart data={timeData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ee" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => '$' + v} />
+                <XAxis dataKey="label" tick={{ fontSize: window.innerWidth < 768 ? 9 : 11 }} interval={window.innerWidth < 768 ? 'preserveStartEnd' : 0} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => '$' + v} hide={window.innerWidth < 768} />
                 <Tooltip formatter={v => fmt(v)} />
                 <Bar dataKey="spent" fill="#3266ad" radius={[4, 4, 0, 0]} name="Spent" />
               </BarChart>
@@ -209,11 +209,11 @@ export default function Analytics() {
       {runningData.length > 1 && (
         <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: '1.25rem' }}>
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Cumulative spending</div>
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 140 : 180}>
             <LineChart data={runningData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ee" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => '$' + v} />
+              <XAxis dataKey="label" tick={{ fontSize: window.innerWidth < 768 ? 9 : 11 }} interval={window.innerWidth < 768 ? 'preserveStartEnd' : 0} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => '$' + v} hide={window.innerWidth < 768} />
               <Tooltip formatter={v => fmt(v)} />
               <Line type="monotone" dataKey="total" stroke="#E24B4A" strokeWidth={2} dot={false} name="Total spent" />
             </LineChart>
