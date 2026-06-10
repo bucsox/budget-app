@@ -10,7 +10,7 @@ function getDateRange(period) {
   const start = new Date()
   if (period === 'Day') start.setHours(0, 0, 0, 0)
   else if (period === 'Week') start.setDate(now.getDate() - 7)
-  else if (period === 'Month') start.setDate(1)
+  else if (period === 'Month') { start.setDate(1); start.setHours(0,0,0,0) }
   return { start, end: now }
 }
 
@@ -19,12 +19,12 @@ function getPrevDateRange(period) {
   const start = new Date()
   const end = new Date()
   if (period === 'Day') {
-    start.setDate(now.getDate() - 1); start.setHours(0, 0, 0, 0)
-    end.setDate(now.getDate() - 1); end.setHours(23, 59, 59, 999)
+    start.setDate(now.getDate() - 1); start.setHours(0,0,0,0)
+    end.setDate(now.getDate() - 1); end.setHours(23,59,59,999)
   } else if (period === 'Week') {
     start.setDate(now.getDate() - 14)
     end.setDate(now.getDate() - 7)
-  } else if (period === 'Month') {
+  } else {
     start.setMonth(now.getMonth() - 1); start.setDate(1)
     end.setMonth(now.getMonth()); end.setDate(0)
   }
@@ -47,15 +47,8 @@ export default function Analytics() {
   const { start, end } = getDateRange(period)
   const { start: prevStart, end: prevEnd } = getPrevDateRange(period)
 
-  const periodTx = transactions.filter(t => {
-    const d = new Date(t.date)
-    return d >= start && d <= end
-  })
-
-  const prevTx = transactions.filter(t => {
-    const d = new Date(t.date)
-    return d >= prevStart && d <= prevEnd
-  })
+  const periodTx = transactions.filter(t => { const d = new Date(t.date); return d >= start && d <= end })
+  const prevTx = transactions.filter(t => { const d = new Date(t.date); return d >= prevStart && d <= prevEnd })
 
   const expenses = periodTx.filter(t => t.type === 'expense')
   const income = periodTx.filter(t => t.type === 'income')
@@ -69,115 +62,120 @@ export default function Analytics() {
   const days = period === 'Day' ? 1 : period === 'Week' ? 7 : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
   const avgDaily = totalSpent / days
 
-  // Category breakdown
   const catMap = {}
-  expenses.forEach(t => {
-    catMap[t.category] = (catMap[t.category] || 0) + t.amount
-  })
-  const catData = Object.entries(catMap)
-    .map(([name, value]) => ({ name, value, pct: Math.round(value / totalSpent * 100) }))
-    .sort((a, b) => b.value - a.value)
+  expenses.forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + t.amount })
+  const catData = Object.entries(catMap).map(([name, value]) => ({ name, value, pct: totalSpent > 0 ? Math.round(value / totalSpent * 100) : 0 })).sort((a, b) => b.value - a.value)
 
-  // Spending over time chart
+  const biggest = [...expenses].sort((a, b) => b.amount - a.amount).slice(0, 5)
+
   const timeData = []
-  if (period === 'Day') {
-    for (let h = 0; h < 24; h++) {
-      const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`
-      const spent = expenses.filter(t => new Date(t.date).getHours() === h).reduce((s, t) => s + t.amount, 0)
-      if (spent > 0) timeData.push({ label, spent })
-    }
-  } else if (period === 'Week') {
+  if (period === 'Week') {
     for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
+      const d = new Date(); d.setDate(d.getDate() - i)
       const key = d.toISOString().slice(0, 10)
       const label = d.toLocaleString('default', { weekday: 'short' })
       const spent = expenses.filter(t => t.date === key).reduce((s, t) => s + t.amount, 0)
       timeData.push({ label, spent })
     }
-  } else {
+  } else if (period === 'Month') {
     const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
     for (let d = 1; d <= daysInMonth; d++) {
       const key = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
       const spent = expenses.filter(t => t.date === key).reduce((s, t) => s + t.amount, 0)
-      if (d % 5 === 0 || d === 1) timeData.push({ label: `${d}`, spent })
-      else timeData.push({ label: '', spent })
+      timeData.push({ label: d % 5 === 0 || d === 1 ? `${d}` : '', spent })
     }
   }
 
-  // Biggest transactions
-  const biggest = [...expenses].sort((a, b) => b.amount - a.amount).slice(0, 5)
-
-  // Running total for the period
   const runningData = []
   let running = 0
   const sortedExpenses = [...expenses].sort((a, b) => new Date(a.date) - new Date(b.date))
-  sortedExpenses.forEach(t => {
-    running += t.amount
-    runningData.push({ label: t.date.slice(5), total: running })
-  })
+  sortedExpenses.forEach(t => { running += t.amount; runningData.push({ label: t.date.slice(5), total: running }) })
+
+  const cardStyle = { background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: '1.25rem' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <h1 style={{ fontSize: 22, fontWeight: 500 }}>Analytics</h1>
-        <div style={{ display: 'flex', gap: 4, background: '#f0f0ee', borderRadius: 8, padding: 4 }}>
-            {PERIOD_OPTIONS.map(p => (
-                <button key={p} onClick={() => setPeriod(p)} style={{ padding: '6px 12px', fontSize: 12, border: 'none', borderRadius: 6, cursor: 'pointer', background: period === p ? '#fff' : 'transparent', color: period === p ? '#2457a0' : '#888', fontWeight: period === p ? 500 : 400, boxShadow: period === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
-                {p}
-                </button>
-            ))}
-            </div>
+        <div style={{ display: 'flex', gap: 4, background: 'var(--bg3)', borderRadius: 8, padding: 4 }}>
+          {PERIOD_OPTIONS.map(p => (
+            <button key={p} onClick={() => setPeriod(p)} style={{ padding: '6px 14px', fontSize: 13, border: 'none', borderRadius: 6, cursor: 'pointer', background: period === p ? 'var(--bg2)' : 'transparent', color: period === p ? 'var(--blue)' : 'var(--text3)', fontWeight: period === p ? 500 : 400, boxShadow: period === p ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+              {p}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Summary metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+      {/* Metrics */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
         {[
-          { label: `Total spent`, value: fmt(totalSpent), color: '#E24B4A' },
-          { label: `Total income`, value: fmt(totalIncome), color: '#1D9E75' },
-          { label: `Avg daily spend`, value: fmt(avgDaily), color: '#1a1a1a' },
-          { label: `vs prev ${period.toLowerCase()}`, value: `${diffPct > 0 ? '+' : ''}${diffPct}%`, color: diffPct > 0 ? '#E24B4A' : '#1D9E75' },
+          { label: 'Total spent', value: fmt(totalSpent), color: 'var(--red)' },
+          { label: 'Total income', value: fmt(totalIncome), color: 'var(--green)' },
+          { label: 'Avg daily spend', value: fmt(avgDaily), color: 'var(--text)' },
+          { label: `vs prev ${period.toLowerCase()}`, value: `${diffPct > 0 ? '+' : ''}${diffPct}%`, color: diffPct > 0 ? 'var(--red)' : 'var(--green)' },
         ].map(c => (
-          <div key={c.label} style={{ background: '#f0f0ee', borderRadius: 10, padding: '1rem' }}>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 6 }}>{c.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 500, color: c.color }}>{c.value}</div>
+          <div key={c.label} style={{ background: 'var(--bg3)', borderRadius: 10, padding: '1rem' }}>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 6 }}>{c.label}</div>
+            <div style={{ fontSize: 18, fontWeight: 500, color: c.color }}>{c.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Spending over time */}
-      <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: '1.25rem' }}>
-        <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Spending over time</div>
-        {timeData.every(d => d.spent === 0)
-          ? <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center', padding: '2rem' }}>No expenses in this period</div>
-          : <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 160 : 200}>
-              <BarChart data={timeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ee" />
-                <XAxis dataKey="label" tick={{ fontSize: window.innerWidth < 768 ? 9 : 11 }} interval={window.innerWidth < 768 ? 'preserveStartEnd' : 0} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => '$' + v} hide={window.innerWidth < 768} />
-                <Tooltip formatter={v => fmt(v)} />
-                <Bar dataKey="spent" fill="#3266ad" radius={[4, 4, 0, 0]} name="Spent" />
-              </BarChart>
-            </ResponsiveContainer>
-        }
-      </div>
+      {/* Spending over time — desktop chart, mobile list */}
+      {period !== 'Day' && (
+        <div style={cardStyle}>
+          <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Spending over time</div>
 
-      {/* Category breakdown + biggest transactions */}
+          <div className="desktop-only">
+            {timeData.every(d => d.spent === 0)
+              ? <div style={{ fontSize: 13, color: 'var(--text4)', textAlign: 'center', padding: '2rem' }}>No expenses in this period</div>
+              : <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={timeData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text3)' }} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--text3)' }} tickFormatter={v => '$' + v} />
+                    <Tooltip formatter={v => fmt(v)} />
+                    <Bar dataKey="spent" fill="var(--blue)" radius={[4,4,0,0]} name="Spent" />
+                  </BarChart>
+                </ResponsiveContainer>
+            }
+          </div>
+
+          <div className="mobile-only">
+            {timeData.filter(d => d.spent > 0).length === 0
+              ? <div style={{ fontSize: 13, color: 'var(--text4)' }}>No expenses in this period</div>
+              : timeData.filter(d => d.spent > 0 && d.label).sort((a,b) => b.spent - a.spent).slice(0, 7).map((d, i) => (
+                <div key={i} style={{ marginBottom: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
+                    <span style={{ color: 'var(--text2)' }}>{period === 'Week' ? d.label : `Day ${d.label}`}</span>
+                    <span style={{ fontWeight: 500, color: 'var(--text)' }}>{fmt(d.spent)}</span>
+                  </div>
+                  <div style={{ background: 'var(--bg3)', borderRadius: 4, height: 6 }}>
+                    <div style={{ width: Math.round(d.spent / Math.max(...timeData.map(x => x.spent)) * 100) + '%', height: 6, borderRadius: 4, background: 'var(--blue)' }} />
+                  </div>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Categories + Biggest — stack on mobile */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem' }}>
-        <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: '1.25rem' }}>
+        <div style={cardStyle}>
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Top categories</div>
           {catData.length === 0
-            ? <div style={{ fontSize: 13, color: '#aaa' }}>No expenses yet</div>
+            ? <div style={{ fontSize: 13, color: 'var(--text4)' }}>No expenses yet</div>
             : catData.map((c, i) => (
               <div key={c.name} style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 10, height: 10, borderRadius: '50%', background: COLORS[i % COLORS.length], display: 'inline-block' }} />
-                    <span style={{ fontWeight: 500 }}>{c.name}</span>
+                    <span style={{ fontWeight: 500, color: 'var(--text)' }}>{c.name}</span>
                   </span>
-                  <span style={{ color: '#888' }}>{fmt(c.value)} <span style={{ color: '#aaa' }}>({c.pct}%)</span></span>
+                  <span style={{ color: 'var(--text3)' }}>{fmt(c.value)} <span style={{ color: 'var(--text4)' }}>({c.pct}%)</span></span>
                 </div>
-                <div style={{ background: '#f0f0ee', borderRadius: 4, height: 6 }}>
+                <div style={{ background: 'var(--bg3)', borderRadius: 4, height: 6 }}>
                   <div style={{ width: c.pct + '%', height: 6, borderRadius: 4, background: COLORS[i % COLORS.length] }} />
                 </div>
               </div>
@@ -185,37 +183,37 @@ export default function Analytics() {
           }
         </div>
 
-        <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: '1.25rem' }}>
+        <div style={cardStyle}>
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Biggest expenses</div>
           {biggest.length === 0
-            ? <div style={{ fontSize: 13, color: '#aaa' }}>No expenses yet</div>
+            ? <div style={{ fontSize: 13, color: 'var(--text4)' }}>No expenses yet</div>
             : biggest.map((t, i) => (
-              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid #f0f0ee', fontSize: 13 }}>
+              <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 22, height: 22, borderRadius: '50%', background: COLORS[i % COLORS.length], display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#fff', fontWeight: 600, flexShrink: 0 }}>{i + 1}</span>
                   <div>
-                    <div style={{ fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{t.description}</div>
-                    <div style={{ fontSize: 11, color: '#aaa' }}>{t.category} · {t.date}</div>
+                    <div style={{ fontWeight: 500, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{t.description}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text4)' }}>{t.category} · {t.date}</div>
                   </div>
                 </div>
-                <span style={{ fontWeight: 500, color: '#E24B4A', flexShrink: 0 }}>-{fmt(t.amount)}</span>
+                <span style={{ fontWeight: 500, color: 'var(--red)', flexShrink: 0 }}>-{fmt(t.amount)}</span>
               </div>
             ))
           }
         </div>
       </div>
 
-      {/* Running total */}
+      {/* Cumulative — desktop only */}
       {runningData.length > 1 && (
-        <div style={{ background: '#fff', border: '1px solid #e5e5e5', borderRadius: 12, padding: '1.25rem' }}>
+        <div className="desktop-only" style={cardStyle}>
           <div style={{ fontSize: 14, fontWeight: 500, marginBottom: '1rem' }}>Cumulative spending</div>
-          <ResponsiveContainer width="100%" height={window.innerWidth < 768 ? 140 : 180}>
+          <ResponsiveContainer width="100%" height={180}>
             <LineChart data={runningData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0ee" />
-              <XAxis dataKey="label" tick={{ fontSize: window.innerWidth < 768 ? 9 : 11 }} interval={window.innerWidth < 768 ? 'preserveStartEnd' : 0} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => '$' + v} hide={window.innerWidth < 768} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text3)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--text3)' }} tickFormatter={v => '$' + v} />
               <Tooltip formatter={v => fmt(v)} />
-              <Line type="monotone" dataKey="total" stroke="#E24B4A" strokeWidth={2} dot={false} name="Total spent" />
+              <Line type="monotone" dataKey="total" stroke="var(--red)" strokeWidth={2} dot={false} name="Total spent" />
             </LineChart>
           </ResponsiveContainer>
         </div>
