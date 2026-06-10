@@ -1,45 +1,11 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
 
-:root {
-  --bg: #f5f5f3;
-  --bg2: #fff;
-  --bg3: #f0f0ee;
-  --border: #e5e5e5;
-  --text: #1a1a1a;
-  --text2: #555;
-  --text3: #888;
-  --text4: #aaa;
-  --blue: #2457a0;
-  --green: #1D9E75;
-  --red: #E24B4A;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #111111;
-    --bg2: #1c1c1e;
-    --bg3: #2c2c2e;
-    --border: #3a3a3c;
-    --text: #f2f2f7;
-    --text2: #c7c7cc;
-    --text3: #8e8e93;
-    --text4: #636366;
-    --blue: #4d8ef0;
-    --green: #30d158;
-    --red: #ff453a;
-  }
-}
-
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
-a { text-decoration: none; color: inherit; }
-input, select, button { font-family: inherit; }
-input, select { background: var(--bg2); color: var(--text); border-color: var(--border); }
-
-.desktop-only { display: block; }
-.mobile-only { display: none; }
-
-@media (max-width: 768px) {
-  h1 { font-size: 18px !important; }
-  .desktop-only { display: none; }
-  .mobile-only { display: block; }
-}
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
