@@ -33,7 +33,8 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
+<Route path="/reset-password" element={<ResetPassword />} />
+<Route path="/#" element={<ResetPassword />} />
         <Route path="/" element={session ? <Layout /> : <Navigate to="/login" />}>
           <Route index element={<Dashboard />} />
           <Route path="transactions" element={<Transactions />} />
